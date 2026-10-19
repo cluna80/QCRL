@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "QCRL",
+      "hasCanvas": false,
+      "bodyTextLen": 2489,
+      "bodyTextHash": "45cae8ae4e548791c08b2e5f08532e7ac21d36183697fcd42cb2e378c1904417",
+      "bodyTextPrefix": "QCRL · VERSION 0.1 Qattice research lab A bounded instrument for",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "QCRL",
+      "hasCanvas": false,
+      "bodyTextLen": 2489,
+      "bodyTextHash": "45cae8ae4e548791c08b2e5f08532e7ac21d36183697fcd42cb2e378c1904417",
+      "bodyTextPrefix": "QCRL · VERSION 0.1 Qattice research lab A bounded instrument for",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

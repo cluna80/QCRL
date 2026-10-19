@@ -1,0 +1,455 @@
+CLAUDE CODE MASTER BUILD PROMPT
+
+Project: Qattice Cryptographic Research Lab (QCRL)
+
+Version 0.1 — Mathematical Discovery and Cryptographic Primitive Research Sandbox
+
+You are acting as a senior Rust systems engineer, computational mathematician, post-quantum cryptography researcher, and security-focused software architect.
+
+Your assignment is to design, implement, test, and document a complete standalone research environment called Qattice Cryptographic Research Lab (QCRL).
+
+This is a serious experimental mathematics and cryptographic research program, not a production cryptography library.
+
+1. Mission
+
+Build a modular, reproducible research sandbox capable of:
+
+1. Investigating mathematical structures relevant to cryptography.
+2. Designing and testing original mathematical algorithms.
+3. Experimenting with lattice-based and hash-based constructions.
+4. Exploring post-quantum zero-knowledge proof optimization.
+5. Researching compact representations of cryptographic relations.
+6. Simulating attacks against experimental primitives.
+7. Comparing experimental constructions against established baselines.
+8. Recording mathematical discoveries, conjectures, failures, and reproducible results.
+9. Supporting future research into entirely new cryptographic primitives.
+
+The laboratory must support both the integration of existing mathematical techniques and the exploration of original constructions.
+
+Primary research philosophy: Mathematical discovery first, rigorous validation second, cryptographic application only after substantial evidence.
+
+Do not claim that a mathematical construction is secure merely because tests pass.
+
+2. Development Environment
+
+Target hardware:
+
+- Windows laptop
+- Ubuntu under WSL2
+- VS Code with WSL integration
+- 16 GB RAM
+- NVIDIA GTX 1660 Ti
+- Rust stable toolchain
+- Python 3 virtual environment
+
+Requirements:
+
+- CPU-first execution.
+- GPU acceleration optional and disabled by default.
+- All experiments must run locally.
+- No paid APIs or cloud services required.
+- Respect memory and CPU limits.
+- Never require administrator/root privileges during ordinary execution.
+- Store the repository within the Linux filesystem, not "/mnt/c".
+- Provide documented setup and launch commands.
+
+The project must be completely independent of the existing QCB Chain and Chain Forge repositories.
+
+No access to production wallets, validator keys, mainnet credentials, or live blockchain nodes.
+
+3. Architecture
+
+Create the following initial project structure:
+
+qattice-cryptographic-research-lab/
+├── Cargo.toml
+├── Cargo.lock
+├── README.md
+├── .gitignore
+├── .python-version
+├── pyproject.toml
+├── rust-toolchain.toml
+├── .vscode/
+│   ├── settings.json
+│   └── tasks.json
+├── crates/
+│   ├── qcrl-math/
+│   ├── qcrl-lattice/
+│   ├── qcrl-primitives/
+│   ├── qcrl-attacks/
+│   ├── qcrl-benchmarks/
+│   ├── qcrl-discovery/
+│   └── qcrl-cli/
+├── python/
+│   └── qcrl/
+├── experiments/
+│   ├── lattice/
+│   ├── hashing/
+│   ├── proof-compression/
+│   ├── zero-knowledge/
+│   └── original-constructions/
+├── tests/
+├── benchmarks/
+├── research/
+│   ├── hypotheses/
+│   ├── candidate-registry/
+│   ├── mathematical-notes/
+│   └── threat-models/
+├── results/
+├── scripts/
+└── docs/
+
+All Rust crates must compile as a single workspace.
+
+Python must be usable independently for mathematical exploration.
+
+Do not create empty placeholder crates that fail to compile.
+
+4. Mathematical Engine
+
+Implement a Rust mathematical experimentation library supporting:
+
+- Modular integer arithmetic.
+- Modular inverses where they exist.
+- Polynomial addition and multiplication.
+- Polynomial reduction modulo specified relations.
+- Vector and matrix arithmetic.
+- Basic finite-field operations.
+- Small-dimensional lattice examples.
+- Norm calculations.
+- Reproducible random instance generation.
+
+Use established Rust libraries where appropriate.
+
+Prefer correctness, readable implementations, and explicit error handling over premature optimization.
+
+Use property-based testing to verify mathematical identities.
+
+Use Python and SymPy as an independent mathematical reference for selected tests.
+
+5. Lattice Research Engine
+
+Create a research module for studying mathematical structures related to lattice cryptography.
+
+Initial experiments:
+
+- Polynomial rings used in lattice constructions.
+- Modular arithmetic under varying parameters.
+- Small-dimensional lattice problems.
+- Matrix transformations.
+- Representation size.
+- Computational complexity.
+- Parameter sensitivity.
+
+Provide toy examples illustrating concepts associated with LWE, Module-LWE, and Module-SIS.
+
+These are educational and experimental implementations only.
+
+Do not claim equivalence to standardized ML-DSA security.
+
+Use publicly documented ML-DSA specifications as reference material, without modifying or replacing its production cryptographic implementation.
+
+6. Experimental Primitive Laboratory
+
+Create a modular interface for registering experimental mathematical and cryptographic constructions.
+
+Each candidate must have:
+
+- Unique identifier.
+- Version.
+- Mathematical definition.
+- Intended purpose.
+- Input and output specifications.
+- Parameter set.
+- Explicit assumptions.
+- Claimed security goals, clearly marked as hypotheses.
+- Known weaknesses.
+- Benchmark results.
+- Reproducible test vectors.
+- Development status.
+
+Support research categories including:
+
+- Hash function candidates.
+- Commitment constructions.
+- Signature-related mathematics.
+- Zero-knowledge proof components.
+- Credential presentation components.
+- Proof compression methods.
+
+Do not attempt to implement every category immediately.
+
+Implement one minimal, working example first.
+
+Experimental primitives must never be exposed as production-safe cryptographic APIs.
+
+7. Mathematical Discovery Engine
+
+Create "qcrl-discovery" as a framework for automated mathematical experimentation.
+
+It must support:
+
+1. Defining a mathematical hypothesis.
+2. Selecting a finite parameter search space.
+3. Generating candidate mathematical transformations.
+4. Checking candidate properties.
+5. Searching for counterexamples.
+6. Recording successful and failed experiments.
+7. Reproducing results using deterministic seeds.
+8. Comparing candidate performance.
+9. Exporting results as JSON and CSV.
+
+The initial discovery algorithm should investigate polynomial transformations over finite rings.
+
+For example:
+
+Can a transformation preserve a specified algebraic relation while reducing its representation cost or computational complexity?
+
+Implement a bounded search that generates small candidate transformations, tests the required identities, and records counterexamples.
+
+Use exhaustive checking when the search space is small enough.
+
+Clearly distinguish:
+
+- Verified finite-domain properties.
+- Empirical observations.
+- Unproven conjectures.
+- Formally proven statements.
+
+A candidate passing tests must never automatically be labeled a mathematical discovery or secure cryptographic primitive.
+
+8. Cryptographic Attack Simulator
+
+Build a testing module that attempts to identify weaknesses in experimental constructions.
+
+Initial capabilities:
+
+- Hash collision searches for deliberately small toy domains.
+- Avalanche-effect measurement.
+- Output distribution analysis.
+- Determinism and reproducibility checks.
+- Boundary-condition testing.
+- Malformed-input testing.
+- Small-parameter exhaustive attacks.
+- Property-based counterexample generation.
+
+Later research extensions may include:
+
+- Forgery experiments.
+- Algebraic distinguishers.
+- Information leakage analysis.
+- Side-channel evaluation.
+- Protocol-level unlinkability testing.
+
+Clearly explain that statistical testing alone does not establish cryptographic security.
+
+All attack experiments must operate on local research implementations and generated test data.
+
+9. Proof Compression Research
+
+Build a dedicated experimental framework to investigate representation efficiency.
+
+Measure:
+
+- Original representation size.
+- Encoded representation size.
+- Compression ratio.
+- Encoding time.
+- Decoding time.
+- Memory consumption.
+- Whether the original mathematical relation remains valid after decoding.
+
+Start with lossless encodings of toy polynomial and lattice objects.
+
+Compare against straightforward canonical serialization.
+
+Do not confuse ordinary data compression with cryptographic proof compression.
+
+A future cryptographic proof-compression candidate must preserve the relevant proof system's completeness, soundness, and zero-knowledge requirements.
+
+10. Benchmarking and Experiment Reproducibility
+
+Use Criterion.rs for Rust microbenchmarks.
+
+Record:
+
+- Experiment identifier.
+- Source commit hash when available.
+- Algorithm version.
+- Parameter set.
+- Random seed.
+- CPU architecture.
+- Available memory.
+- Rust compiler version.
+- Python version when applicable.
+- Execution duration.
+- Peak memory when measurable.
+- Output size.
+- Test result.
+- Timestamp.
+
+Export machine-readable reports.
+
+Provide a comparison command for two experiment runs.
+
+Do not invent benchmark measurements.
+
+Do not compare optimized production cryptography against unoptimized toy implementations as though the results demonstrate superiority.
+
+11. Command-Line Interface
+
+Build a CLI named "qcrl".
+
+Initial commands:
+
+qcrl doctor
+qcrl list
+qcrl math demo
+qcrl lattice demo
+qcrl discovery run
+qcrl attacks demo
+qcrl benchmark
+qcrl report
+
+Expected behavior:
+
+- "doctor" checks the development environment.
+- "list" displays registered experiments.
+- "math demo" demonstrates modular and polynomial arithmetic.
+- "lattice demo" runs a reproducible toy experiment.
+- "discovery run" executes the initial bounded mathematical search.
+- "attacks demo" tests a deliberately weak toy construction.
+- "benchmark" measures a supported experiment.
+- "report" summarizes recorded results.
+
+Every command must have meaningful help output and sensible defaults.
+
+12. Research Integrity and Security Boundaries
+
+Enforce these rules:
+
+- Experimental constructions are not production cryptography.
+- No production signing keys or credentials.
+- No integration with live QCB consensus.
+- No automated deployment of discovered algorithms.
+- No unsupported claims of post-quantum security.
+- No arbitrary execution of generated code without sandbox controls.
+- Bound computation time, search space, and memory.
+- Maintain reproducible experiments.
+- Document failed hypotheses and discovered weaknesses.
+
+Keep experimental mathematical algorithms isolated from trusted cryptographic dependencies.
+
+13. Initial Research Program
+
+The first research program is:
+
+QCRL-EXP-001: Algebraic Transformation and Representation Efficiency
+
+Research question:
+
+Can we identify polynomial transformations over finite rings that preserve selected algebraic relations while improving computational or representation efficiency?
+
+Implement:
+
+1. A mathematical definition of the toy problem.
+2. Parameterized polynomial rings.
+3. Candidate transformation generation.
+4. Property checking.
+5. Counterexample search.
+6. Representation-size measurements.
+7. Runtime benchmarks.
+8. JSON results.
+9. Human-readable research report.
+
+Start with small parameters suitable for a laptop.
+
+Provide at least one identity-preserving transformation and one deliberately invalid transformation so the test framework demonstrates both acceptance and rejection.
+
+Do not claim a novel result unless novelty has been independently established.
+
+14. Testing Requirements
+
+Before considering the initial implementation complete:
+
+- "cargo fmt --check" passes.
+- "cargo clippy --workspace --all-targets -- -D warnings" passes.
+- "cargo test --workspace" passes.
+- Python tests pass.
+- CLI help works.
+- "qcrl doctor" works.
+- First mathematical experiment runs successfully.
+- Attack simulator identifies a known toy weakness.
+- Results are saved.
+- Repeating an experiment with the same seed produces equivalent mathematical outputs.
+
+Provide clear errors for unsupported parameters.
+
+15. Build Sequence
+
+Implement incrementally.
+
+Phase 1 — Foundation
+
+Create repository, Rust workspace, Python environment, VS Code configuration, CLI, documentation, and environment checks.
+
+Phase 2 — Mathematics
+
+Implement modular arithmetic, polynomials, matrices, property-based tests, and Python reference calculations.
+
+Phase 3 — Research engines
+
+Implement lattice experiments, discovery framework, attack simulator, and candidate registry.
+
+Phase 4 — Benchmarking
+
+Implement performance measurements, reproducibility metadata, result storage, and reports.
+
+Phase 5 — First research experiment
+
+Complete QCRL-EXP-001 end to end.
+
+Do not build a web dashboard, distributed cluster, blockchain integration, or GPU backend in version 0.1.
+
+These are future extensions.
+
+16. Deliverables
+
+Provide:
+
+1. Working source code.
+2. Compiling Rust workspace.
+3. Functional Python environment.
+4. VS Code development configuration.
+5. Automated tests.
+6. Executable mathematical discovery experiment.
+7. Attack demonstration.
+8. Benchmark and reporting system.
+9. Research documentation.
+10. A roadmap for version 0.2.
+
+After each phase, run the relevant tests and fix failures before continuing.
+
+Never report a phase as complete without actually verifying its acceptance criteria.
+
+17. Execution Instructions
+
+Begin by inspecting the current WSL environment.
+
+Check installed versions of Rust, Cargo, Python, and available system resources.
+
+Create the project under:
+
+"~/research/qattice-cryptographic-research-lab"
+
+Do not modify existing QCB Chain or Chain Forge repositories.
+
+Present the proposed implementation plan briefly, then begin Phase 1.
+
+Proceed through the phases incrementally, running tests at each stage.
+
+If a dependency, package, or environment issue blocks progress, explain the issue and propose the smallest corrective action.
+
+Do not silently change the research objectives.
+
+Final objective: Deliver a functioning local mathematical cryptography research laboratory that can generate, test, challenge, benchmark, and document experimental mathematical constructions as a foundation for future original cryptographic primitive research.

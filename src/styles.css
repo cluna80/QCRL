@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-ink: #10140f;
+  --color-paper: #e7e4d6;
+  --color-panel: #171d17;
+  --color-panel-2: #212922;
+  --color-line: #313a32;
+  --color-muted: #a3ad9c;
+  --color-brass: #e0b15c;
+  --color-brass-ink: #1c1508;
+  --color-oxide: #e07a62;
+  --color-sage: #b7d7a1;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-brass);
+    outline-offset: 2px;
+  }
+
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+}
+
+.lab-rule {
+  background-image: radial-gradient(circle, var(--color-line) 1px, transparent 1.2px);
+  background-size: 14px 14px;
+}
+
+.flex-col > * {
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
