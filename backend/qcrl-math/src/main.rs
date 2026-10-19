@@ -17,6 +17,10 @@ struct SearchRequest {
     relation: String,
     seed: u32,
     candidates: usize,
+    #[serde(rename = "kMin")]
+    k_min: usize,
+    #[serde(rename = "kMax")]
+    k_max: usize,
 }
 
 #[derive(Deserialize)]
@@ -133,9 +137,15 @@ async fn search(
             "candidates must be between 0 and 256",
         ));
     }
+    if request.k_min > request.k_max || request.k_max > 64 {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "kMin and kMax must satisfy 0 <= kMin <= kMax <= 64",
+        ));
+    }
 
-    let mut specs = Vec::with_capacity(ring.n + 2 + request.candidates);
-    for k in 0..ring.n {
+    let mut specs = Vec::with_capacity(request.k_max - request.k_min + 1 + 2 + request.candidates);
+    for k in request.k_min..=request.k_max {
         let images = (0..ring.n)
             .map(|degree| substitute_monomial(degree, k, ring))
             .collect();
@@ -523,13 +533,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn search_returns_ranked_candidate_reports() {
+    async fn search_returns_ranked_candidate_reports_for_requested_range() {
         let Json(response) = search(Json(SearchRequest {
             q: 17,
             n: 4,
             relation: "negacyclic".into(),
             seed: 7,
             candidates: 1,
+            k_min: 2,
+            k_max: 5,
         }))
         .await
         .unwrap();
@@ -546,6 +558,33 @@ mod tests {
                 .iter()
                 .any(|result| { result.candidate.id == "sigma-3" && result.candidate.accepted })
         );
+        assert!(
+            !response
+                .results
+                .iter()
+                .any(|result| result.candidate.id == "sigma-1")
+        );
+        assert!(
+            response
+                .results
+                .iter()
+                .any(|result| result.candidate.id == "sigma-5")
+        );
+    }
+
+    #[tokio::test]
+    async fn search_rejects_an_inverted_exponent_range() {
+        let result = search(Json(SearchRequest {
+            q: 17,
+            n: 4,
+            relation: "negacyclic".into(),
+            seed: 7,
+            candidates: 1,
+            k_min: 5,
+            k_max: 4,
+        }))
+        .await;
+        assert!(result.is_err());
     }
 
     #[tokio::test]
@@ -569,6 +608,8 @@ mod tests {
             relation: "negacyclic".into(),
             seed: 7,
             candidates: 1,
+            k_min: 0,
+            k_max: 3,
         };
         let ring = Ring::new(payload.q, payload.n, true).unwrap();
         let mut specs = Vec::new();

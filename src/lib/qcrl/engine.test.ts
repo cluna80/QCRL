@@ -95,6 +95,17 @@ describe("QCRL-EXP-001", () => {
     const accepted = report.candidates.filter((c) => c.kind === "power-substitution" && c.accepted).map((c) => c.k);
     assert.deepEqual(accepted, [1, 3, 5, 7]);
   });
+
+  it("searches only the requested exponent range and ranks the results", async () => {
+    const report = await runDiscovery(17, 4, "negacyclic", 4, 2, 5);
+    assert.deepEqual(
+      report.candidates.filter((candidate) => candidate.kind === "power-substitution").map((candidate) => candidate.k),
+      [2, 3, 4, 5],
+    );
+    assert.deepEqual(report.rankedCandidates.map((candidate) => candidate.rank), [1, 2, 3, 4, 5, 6, 7]);
+    assert.ok(report.rankedCandidates.some((candidate) => candidate.classification === "verified-finite"));
+    await assert.rejects(runDiscovery(17, 4, "negacyclic", 4, 5, 2), /Exponent range/);
+  });
 });
 
 describe("attacks, lattices, encodings", () => {

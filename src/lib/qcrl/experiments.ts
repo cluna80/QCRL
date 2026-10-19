@@ -65,6 +65,10 @@ export type CandidateReport = {
   classification: Classification;
 };
 
+export type RankedCandidateReport = CandidateReport & { rank: number };
+
+export type DiscoveryEngine = "rust" | "typescript fallback";
+
 export type DiscoveryReport = {
   experimentId: "QCRL-EXP-001";
   version: string;
@@ -73,7 +77,9 @@ export type DiscoveryReport = {
   ring: { q: number; n: number; r: number; relation: string };
   seed: number;
   method: string;
+  engine: DiscoveryEngine;
   candidates: CandidateReport[];
+  rankedCandidates: RankedCandidateReport[];
   acceptedIds: string[];
   rejectedIds: string[];
   preservingExample: string | null;
@@ -329,7 +335,10 @@ function buildDiscoveryReport(
   n: number,
   relation: "negacyclic" | "cyclic",
   seed: number,
+  kMin = 0,
+  kMax = n - 1,
   backendCandidates?: CandidateReport[],
+  engine: DiscoveryEngine = "typescript fallback",
 ): DiscoveryReport {
   assertSeed(seed);
   requirePrime(q, "QCRL-EXP-001");
@@ -339,7 +348,7 @@ function buildDiscoveryReport(
   const candidates: CandidateReport[] = backendCandidates ? [...backendCandidates] : [];
 
   if (!backendCandidates) {
-    for (let k = 0; k < ring.n; k += 1) {
+    for (let k = kMin; k <= kMax; k += 1) {
       const images = Array.from({ length: ring.n }, (_, i) => ringSubstitute(monomial(i, ring.n), k, ring));
       candidates.push(
         analyze({
@@ -412,6 +421,17 @@ function buildDiscoveryReport(
 
   const accepted = candidates.filter((c) => c.accepted);
   const rejected = candidates.filter((c) => !c.accepted);
+  const rankedCandidates = candidates
+    .slice()
+    .sort((left, right) => {
+      const score = (candidate: CandidateReport) =>
+        Number(candidate.accepted) * 100 +
+        Number(candidate.unital) * 10 +
+        Number(candidate.multiplicative) * 5 +
+        Number(candidate.bijective);
+      return score(right) - score(left) || left.id.localeCompare(right.id);
+    })
+    .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
   const nontrivial = accepted.find((c) => c.kind === "power-substitution" && c.k !== 1) ?? accepted[0] ?? null;
   const invalid = candidates.find((c) => c.id === "drop-constant") ?? rejected[0] ?? null;
 
@@ -432,9 +452,11 @@ function buildDiscoveryReport(
       "A candidate T is a Z/qZ-linear map on coefficient vectors of R = Z/qZ[x]/(x^n − r). It is accepted only when T(1)=1, T(fg)=T(f)T(g) for every pair (checked on a monomial basis, which is exhaustive because both sides are bilinear), and T is bijective (so a=b iff T(a)=T(b)). Acceptance is not a claim of novelty or security.",
     ring: { q: ring.q, n: ring.n, r: ring.r, relation: relationLabel(ring) },
     seed,
+    engine,
     method:
       "Every map is stored as its matrix on the monomial basis, so additivity holds by construction. Multiplicativity is every pair x^i · x^j. Bijectivity is a non-zero determinant. Power substitutions are also compared with the classical rule: x ↦ x^k induces an endomorphism iff r^k ≡ r (mod q), and for r ∈ {±1} bijectivity is predicted iff that holds and gcd(k, n)=1.",
     candidates,
+    rankedCandidates,
     acceptedIds: accepted.map((c) => c.id),
     rejectedIds: rejected.map((c) => c.id),
     preservingExample: nontrivial
@@ -472,29 +494,36 @@ export async function runDiscovery(
   n: number,
   relation: "negacyclic" | "cyclic",
   seed: number,
+  kMin = 0,
+  kMax = n - 1,
 ): Promise<DiscoveryReport> {
   assertSeed(seed);
   requirePrime(q, "QCRL-EXP-001");
   parseRing(q, n, relation);
+  if (!Number.isInteger(kMin) || !Number.isInteger(kMax) || kMin < 0 || kMax > 64 || kMin > kMax) {
+    throw new QcrlError("Exponent range must satisfy 0 <= kMin <= kMax <= 64.");
+  }
   try {
     const response = await fetchBackend<{
       results: (CandidateReport & { rank: number; score: number })[];
-    }>("/api/search", { q, n, relation, seed, candidates: 1 });
+    }>("/api/search", { q, n, relation, seed, candidates: 1, kMin, kMax });
     const candidates = response.results
       .map(({ rank: _rank, score: _score, ...candidate }) => candidate)
       .sort((left, right) => {
         const order = (id: string) => {
           const power = /^sigma-(\d+)$/.exec(id);
           if (power) return Number(power[1]);
-          if (id === "drop-constant") return n;
-          if (id === "reversal") return n + 1;
-          return n + 2;
+          if (id === "drop-constant") return kMax + 1;
+          if (id === "reversal") return kMax + 2;
+          return kMax + 3;
         };
         return order(left.id) - order(right.id);
       });
-    return buildDiscoveryReport(q, n, relation, seed, candidates);
+    return buildDiscoveryReport(q, n, relation, seed, kMin, kMax, candidates, "rust");
   } catch (error) {
-    if (error instanceof TypeError) return buildDiscoveryReport(q, n, relation, seed);
+    if (error instanceof TypeError) {
+      return buildDiscoveryReport(q, n, relation, seed, kMin, kMax, undefined, "typescript fallback");
+    }
     throw error;
   }
 }
