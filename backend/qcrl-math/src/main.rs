@@ -1,7 +1,7 @@
 use axum::{
     Router,
     extract::Json,
-    http::{HeaderValue, Method, StatusCode},
+    http::{Method, StatusCode},
     routing::{get, post},
 };
 use qcrl_math::{Ring, automorphism, mod_inverse, modulo, ring_mul};
@@ -503,10 +503,7 @@ impl Mulberry32 {
 #[tokio::main]
 async fn main() {
     let cors = CorsLayer::new()
-        .allow_origin([
-            HeaderValue::from_static("http://localhost:8080"),
-            HeaderValue::from_static("http://127.0.0.1:8080"),
-        ])
+        .allow_origin(Any)
         .allow_methods([Method::GET, Method::POST])
         .allow_headers(Any);
     let app = Router::new()
