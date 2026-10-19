@@ -10,6 +10,7 @@ import {
   ceilLog2,
   center,
   detMod,
+  fetchBackend,
   formatPoly,
   formatVec,
   isPrime,
@@ -323,77 +324,85 @@ function analyze(input: {
   };
 }
 
-export function runDiscovery(q: number, n: number, relation: "negacyclic" | "cyclic", seed: number): DiscoveryReport {
+function buildDiscoveryReport(
+  q: number,
+  n: number,
+  relation: "negacyclic" | "cyclic",
+  seed: number,
+  backendCandidates?: CandidateReport[],
+): DiscoveryReport {
   assertSeed(seed);
   requirePrime(q, "QCRL-EXP-001");
   const ring = parseRing(q, n, relation);
   if (!Number.isInteger(seed)) throw new QcrlError(`Seed must be an integer, received ${String(seed)}.`);
   const rng = mulberry32(seed);
-  const candidates: CandidateReport[] = [];
+  const candidates: CandidateReport[] = backendCandidates ? [...backendCandidates] : [];
 
-  for (let k = 0; k < ring.n; k += 1) {
-    const images = Array.from({ length: ring.n }, (_, i) => ringSubstitute(monomial(i, ring.n), k, ring));
+  if (!backendCandidates) {
+    for (let k = 0; k < ring.n; k += 1) {
+      const images = Array.from({ length: ring.n }, (_, i) => ringSubstitute(monomial(i, ring.n), k, ring));
+      candidates.push(
+        analyze({
+          id: `sigma-${k}`,
+          kind: "power-substitution",
+          k,
+          matrix: matrixFromImages(images),
+          ring,
+          compactBits: ceilLog2(Math.max(2, ring.n)),
+          applyCost: `${ring.n} placements (one per coefficient)`,
+        }),
+      );
+    }
+
+    const dropImages = Array.from({ length: ring.n }, (_, i) => {
+      const image = new Array<number>(ring.n).fill(0);
+      if (i > 0) image[i - 1] = 1;
+      return image;
+    });
     candidates.push(
       analyze({
-        id: `sigma-${k}`,
-        kind: "power-substitution",
-        k,
-        matrix: matrixFromImages(images),
+        id: "drop-constant",
+        kind: "drop-constant",
+        k: null,
+        matrix: matrixFromImages(dropImages),
         ring,
-        compactBits: ceilLog2(Math.max(2, ring.n)),
-        applyCost: `${ring.n} placements (one per coefficient)`,
+        compactBits: null,
+        applyCost: `${ring.n} copies, discarding the constant term's destination`,
+      }),
+    );
+
+    const revImages = Array.from({ length: ring.n }, (_, i) => {
+      const image = new Array<number>(ring.n).fill(0);
+      image[ring.n - 1 - i] = 1;
+      return image;
+    });
+    candidates.push(
+      analyze({
+        id: "reversal",
+        kind: "reversal",
+        k: null,
+        matrix: matrixFromImages(revImages),
+        ring,
+        compactBits: ring.n * ceilLog2(ring.n),
+        applyCost: `${ring.n} placements`,
+      }),
+    );
+
+    const seeded = Array.from({ length: ring.n }, () =>
+      Array.from({ length: ring.n }, () => randBelow(rng, ring.q)),
+    );
+    candidates.push(
+      analyze({
+        id: "seeded-linear",
+        kind: "seeded-linear",
+        k: null,
+        matrix: seeded,
+        ring,
+        compactBits: null,
+        applyCost: `${ring.n * ring.n} multiplications`,
       }),
     );
   }
-
-  const dropImages = Array.from({ length: ring.n }, (_, i) => {
-    const image = new Array<number>(ring.n).fill(0);
-    if (i > 0) image[i - 1] = 1;
-    return image;
-  });
-  candidates.push(
-    analyze({
-      id: "drop-constant",
-      kind: "drop-constant",
-      k: null,
-      matrix: matrixFromImages(dropImages),
-      ring,
-      compactBits: null,
-      applyCost: `${ring.n} copies, discarding the constant term's destination`,
-    }),
-  );
-
-  const revImages = Array.from({ length: ring.n }, (_, i) => {
-    const image = new Array<number>(ring.n).fill(0);
-    image[ring.n - 1 - i] = 1;
-    return image;
-  });
-  candidates.push(
-    analyze({
-      id: "reversal",
-      kind: "reversal",
-      k: null,
-      matrix: matrixFromImages(revImages),
-      ring,
-      compactBits: ring.n * ceilLog2(ring.n),
-      applyCost: `${ring.n} placements`,
-    }),
-  );
-
-  const seeded = Array.from({ length: ring.n }, () =>
-    Array.from({ length: ring.n }, () => randBelow(rng, ring.q)),
-  );
-  candidates.push(
-    analyze({
-      id: "seeded-linear",
-      kind: "seeded-linear",
-      k: null,
-      matrix: seeded,
-      ring,
-      compactBits: null,
-      applyCost: `${ring.n * ring.n} multiplications`,
-    }),
-  );
 
   const power = candidates.filter((c) => c.kind === "power-substitution");
   const criterionAgrees = power.every((c) => {
@@ -456,6 +465,38 @@ export function runDiscovery(q: number, n: number, relation: "negacyclic" | "cyc
         ],
     fingerprint: stable(mathPayload),
   };
+}
+
+export async function runDiscovery(
+  q: number,
+  n: number,
+  relation: "negacyclic" | "cyclic",
+  seed: number,
+): Promise<DiscoveryReport> {
+  assertSeed(seed);
+  requirePrime(q, "QCRL-EXP-001");
+  parseRing(q, n, relation);
+  try {
+    const response = await fetchBackend<{
+      results: (CandidateReport & { rank: number; score: number })[];
+    }>("/api/search", { q, n, relation, seed, candidates: 1 });
+    const candidates = response.results
+      .map(({ rank: _rank, score: _score, ...candidate }) => candidate)
+      .sort((left, right) => {
+        const order = (id: string) => {
+          const power = /^sigma-(\d+)$/.exec(id);
+          if (power) return Number(power[1]);
+          if (id === "drop-constant") return n;
+          if (id === "reversal") return n + 1;
+          return n + 2;
+        };
+        return order(left.id) - order(right.id);
+      });
+    return buildDiscoveryReport(q, n, relation, seed, candidates);
+  } catch (error) {
+    if (error instanceof TypeError) return buildDiscoveryReport(q, n, relation, seed);
+    throw error;
+  }
 }
 
 function sampleMatrix(rows: number, cols: number, q: number, rng: () => number): number[][] {
@@ -1013,7 +1054,7 @@ export function runSelfTest(): SelfCheck[] {
     `T(fg)=${formatPoly(bad, 5)}, T(f)T(g)=${formatPoly(left, 5)}.`,
   );
 
-  const discovery = runDiscovery(17, 4, "negacyclic", 7);
+  const discovery = buildDiscoveryReport(17, 4, "negacyclic", 7);
   const sigma1 = discovery.candidates.find((c) => c.id === "sigma-1");
   const sigma3 = discovery.candidates.find((c) => c.id === "sigma-3");
   const drop = discovery.candidates.find((c) => c.id === "drop-constant");
@@ -1026,7 +1067,7 @@ export function runSelfTest(): SelfCheck[] {
     discovery.criterionAgrees ? "Basis check matches the prediction." : "Mismatch recorded.",
   );
 
-  const again = runDiscovery(17, 4, "negacyclic", 7);
+  const again = buildDiscoveryReport(17, 4, "negacyclic", 7);
   push(
     "Same seed, same discovery",
     discovery.fingerprint === again.fingerprint,
@@ -1061,7 +1102,7 @@ export function runSelfTest(): SelfCheck[] {
 
   let unsupported = false;
   try {
-    runDiscovery(9, 4, "negacyclic", 1);
+    buildDiscoveryReport(9, 4, "negacyclic", 1);
   } catch (error) {
     unsupported = error instanceof QcrlError && /prime/.test(error.message);
   }

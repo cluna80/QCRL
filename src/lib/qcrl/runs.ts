@@ -176,8 +176,13 @@ export function downloadText(filename: string, contents: string, type: string): 
   URL.revokeObjectURL(url);
 }
 
-export function timeCall<T>(fn: () => T): { value: T; durationMs: number } {
+export function timeCall<T>(fn: () => Promise<T>): Promise<{ value: T; durationMs: number }>;
+export function timeCall<T>(fn: () => T): { value: T; durationMs: number };
+export function timeCall<T>(fn: () => T | Promise<T>) {
   const started = performance.now();
   const value = fn();
+  if (value instanceof Promise) {
+    return value.then((resolved) => ({ value: resolved, durationMs: performance.now() - started }));
+  }
   return { value, durationMs: performance.now() - started };
 }

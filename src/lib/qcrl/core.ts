@@ -544,3 +544,18 @@ export function fnv1a(text: string): string {
 export function stable(value: unknown): string {
   return JSON.stringify(value);
 }
+
+export async function fetchBackend<T>(endpoint: string, body: unknown): Promise<T> {
+  const response = await fetch(`http://localhost:3001${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => null)) as { error?: unknown } | null;
+    throw new QcrlError(
+      typeof payload?.error === "string" ? payload.error : `Rust backend returned HTTP ${response.status}.`,
+    );
+  }
+  return (await response.json()) as T;
+}

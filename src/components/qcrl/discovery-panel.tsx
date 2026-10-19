@@ -18,11 +18,11 @@ export function DiscoveryPanel({ save }: { save: (input: RunInput) => void }) {
   const [report, setReport] = useState<DiscoveryReport | null>(null);
   const [repeat, setRepeat] = useState<string>("");
 
-  function run() {
+  async function run() {
     setError("");
     setRepeat("");
     try {
-      const timed = timeCall(() =>
+      const timed = await timeCall(() =>
         runDiscovery(readInt(q, "Modulus"), readInt(n, "Degree"), relation, readInt(seed, "Seed")),
       );
       setReport(timed.value);
@@ -43,13 +43,13 @@ export function DiscoveryPanel({ save }: { save: (input: RunInput) => void }) {
     }
   }
 
-  function runTwice() {
+  async function runTwice() {
     setError("");
     try {
-      const first = timeCall(() =>
+      const first = await timeCall(() =>
         runDiscovery(readInt(q, "Modulus"), readInt(n, "Degree"), relation, readInt(seed, "Seed")),
       );
-      const second = timeCall(() =>
+      const second = await timeCall(() =>
         runDiscovery(readInt(q, "Modulus"), readInt(n, "Degree"), relation, readInt(seed, "Seed")),
       );
       setReport(first.value);

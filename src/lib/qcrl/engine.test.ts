@@ -26,9 +26,9 @@ describe("modular arithmetic", () => {
     assert.throws(() => modInv(8, 12), /Inverse does not exist/);
   });
 
-  it("rejects a composite discovery modulus", () => {
-    assert.throws(() => runDiscovery(9, 4, "negacyclic", 1), /prime/);
-    assert.throws(() => runDiscovery(17, 0, "cyclic", 1), /degree/);
+  it("rejects a composite discovery modulus", async () => {
+    await assert.rejects(runDiscovery(9, 4, "negacyclic", 1), /prime/);
+    await assert.rejects(runDiscovery(17, 0, "cyclic", 1), /degree/);
   });
 });
 
@@ -75,8 +75,8 @@ describe("matrices", () => {
 });
 
 describe("QCRL-EXP-001", () => {
-  it("accepts a real automorphism and rejects the planted invalid map", () => {
-    const report = runDiscovery(17, 4, "negacyclic", 20261015);
+  it("accepts a real automorphism and rejects the planted invalid map", async () => {
+    const report = await runDiscovery(17, 4, "negacyclic", 20261015);
     const keep = report.candidates.find((c) => c.id === "sigma-3");
     const drop = report.candidates.find((c) => c.id === "drop-constant");
     assert.equal(keep?.accepted, true);
@@ -86,12 +86,12 @@ describe("QCRL-EXP-001", () => {
     assert.equal(rev?.accepted, false);
     assert.ok(drop?.counterexample);
     assert.equal(report.criterionAgrees, true);
-    assert.equal(report.fingerprint, runDiscovery(17, 4, "negacyclic", 20261015).fingerprint);
-    assert.notEqual(report.fingerprint, runDiscovery(17, 4, "negacyclic", 20261016).fingerprint);
+    assert.equal(report.fingerprint, (await runDiscovery(17, 4, "negacyclic", 20261015)).fingerprint);
+    assert.notEqual(report.fingerprint, (await runDiscovery(17, 4, "negacyclic", 20261016)).fingerprint);
   });
 
-  it("accepts exactly the odd exponents coprime to 8 on the negacyclic ring", () => {
-    const report = runDiscovery(17, 8, "negacyclic", 4);
+  it("accepts exactly the odd exponents coprime to 8 on the negacyclic ring", async () => {
+    const report = await runDiscovery(17, 8, "negacyclic", 4);
     const accepted = report.candidates.filter((c) => c.kind === "power-substitution" && c.accepted).map((c) => c.k);
     assert.deepEqual(accepted, [1, 3, 5, 7]);
   });
