@@ -85,6 +85,7 @@ export type DiscoveryReport = {
   preservingExample: string | null;
   invalidExample: string | null;
   criterionAgrees: boolean;
+  criterionLog: string[];
   notes: string[];
   formalOnThisParameterSet: string[];
   conjectures: string[];
@@ -234,8 +235,8 @@ export function inducesEndomorphism(k: number, ring: Ring): boolean {
   return modPow(ring.r, k, ring.q) === mod(ring.r, ring.q);
 }
 
-function predictedBijective(k: number, ring: Ring): boolean {
-  return inducesEndomorphism(k, ring) && gcdInt(k, ring.n) === 1;
+function predictedLinearBijective(k: number, ring: Ring): boolean {
+  return gcdInt(k, ring.n) === 1;
 }
 
 function gcdInt(a: number, b: number): number {
@@ -414,10 +415,40 @@ function buildDiscoveryReport(
   }
 
   const power = candidates.filter((c) => c.kind === "power-substitution");
-  const criterionAgrees = power.every((c) => {
+  const criterionChecks = power.map((c) => {
     const k = c.k ?? 0;
-    return c.multiplicative === inducesEndomorphism(k, ring) && c.bijective === predictedBijective(k, ring);
+    const endomorphism = inducesEndomorphism(k, ring);
+    const linearBijective = predictedLinearBijective(k, ring);
+    const automorphism = endomorphism && linearBijective;
+    return {
+      candidate: c,
+      k,
+      endomorphism,
+      linearBijective,
+      automorphism,
+      endomorphismAgrees: c.multiplicative === endomorphism,
+      bijectivityAgrees: c.bijective === linearBijective,
+      automorphismAgrees: c.accepted === automorphism,
+    };
   });
+  const criterionAgrees = criterionChecks.every(
+    (check) => check.endomorphismAgrees && check.bijectivityAgrees && check.automorphismAgrees,
+  );
+  const criterionLog = [
+    "Endomorphism prediction checks r^k ≡ r (mod q). Coefficient-map bijectivity is independent: it is predicted by gcd(k, n)=1; full automorphism requires both.",
+    "A substitution can fail multiplicativity and still be a bijection on coefficient vectors.",
+    ...criterionChecks.map((check) => {
+      const observedEndomorphism = check.candidate.multiplicative;
+      const observedBijective = check.candidate.bijective;
+      const observedAutomorphism = check.candidate.accepted;
+      const mismatches = [
+        check.endomorphismAgrees ? null : `multiplicative expected ${check.endomorphism ? "yes" : "no"}, observed ${observedEndomorphism ? "yes" : "no"}`,
+        check.bijectivityAgrees ? null : `bijective expected ${check.linearBijective ? "yes" : "no"}, observed ${observedBijective ? "yes" : "no"}`,
+        check.automorphismAgrees ? null : `automorphism expected ${check.automorphism ? "yes" : "no"}, observed ${observedAutomorphism ? "yes" : "no"}`,
+      ].filter((detail): detail is string => detail !== null);
+      return `k=${check.k}: endomorphism ${check.endomorphism ? "yes" : "no"} / observed multiplicative ${observedEndomorphism ? "yes" : "no"}; gcd(${check.k}, ${ring.n})=${gcdInt(check.k, ring.n)}, linear bijective ${check.linearBijective ? "yes" : "no"} / observed ${observedBijective ? "yes" : "no"}; automorphism ${check.automorphism ? "yes" : "no"} / observed ${observedAutomorphism ? "yes" : "no"}${mismatches.length ? `; MISMATCH: ${mismatches.join("; ")}` : "; all checks agree"}.`;
+    }),
+  ];
 
   const accepted = candidates.filter((c) => c.accepted);
   const rejected = candidates.filter((c) => !c.accepted);
@@ -454,7 +485,7 @@ function buildDiscoveryReport(
     seed,
     engine,
     method:
-      "Every map is stored as its matrix on the monomial basis, so additivity holds by construction. Multiplicativity is every pair x^i · x^j. Bijectivity is a non-zero determinant. Power substitutions are also compared with the classical rule: x ↦ x^k induces an endomorphism iff r^k ≡ r (mod q), and for r ∈ {±1} bijectivity is predicted iff that holds and gcd(k, n)=1.",
+      "Every map is stored as its matrix on the monomial basis, so additivity holds by construction. Multiplicativity is every pair x^i · x^j. Linear-map bijectivity is a non-zero determinant. For power substitutions, endomorphism is predicted iff r^k ≡ r (mod q), linear-map bijectivity iff gcd(k, n)=1, and an automorphism requires both.",
     candidates,
     rankedCandidates,
     acceptedIds: accepted.map((c) => c.id),
@@ -466,6 +497,7 @@ function buildDiscoveryReport(
       ? `${invalid.id}: ${invalid.counterexample ?? invalid.reason}`
       : null,
     criterionAgrees,
+    criterionLog,
     notes: [
       "A passing candidate is a verified finite-domain property of this exact ring. It is not labeled a discovery and it is not a cryptographic primitive.",
       "Statistical or algebraic success inside this bound says nothing about other parameters.",

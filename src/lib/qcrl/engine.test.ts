@@ -106,6 +106,14 @@ describe("QCRL-EXP-001", () => {
     assert.ok(report.rankedCandidates.some((candidate) => candidate.classification === "verified-finite"));
     await assert.rejects(runDiscovery(17, 4, "negacyclic", 4, 5, 2), /Exponent range/);
   });
+
+  it("compares coefficient bijectivity separately from multiplicativity", async () => {
+    const report = await runDiscovery(17, 11, "negacyclic", 20261015, 13, 16);
+    assert.equal(report.criterionAgrees, true);
+    assert.match(report.criterionLog[1] ?? "", /still be a bijection/);
+    assert.match(report.criterionLog.find((line) => line.startsWith("k=14:")) ?? "", /linear bijective yes \/ observed yes/);
+    assert.match(report.criterionLog.find((line) => line.startsWith("k=14:")) ?? "", /automorphism no \/ observed no/);
+  });
 });
 
 describe("attacks, lattices, encodings", () => {

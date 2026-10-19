@@ -168,6 +168,13 @@ export function DiscoveryPanel({ save }: { save: (input: RunInput) => void }) {
             <Metric label="Criterion" value={report.criterionAgrees ? "Agrees" : "Disagrees"} />
             <Metric label="Engine" value={report.engine} />
           </div>
+          <Callout tone={report.criterionAgrees ? "sage" : "oxide"} title="CRITERION CHECK">
+            <ul className="flex flex-col gap-2 font-mono text-xs">
+              {report.criterionLog.map((line, index) => (
+                <li key={`${index}-${line}`}>{line}</li>
+              ))}
+            </ul>
+          </Callout>
           <Callout tone="sage" title="PRESERVING EXAMPLE">
             <p>{report.preservingExample}</p>
           </Callout>

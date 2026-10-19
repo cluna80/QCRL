@@ -3,6 +3,7 @@ import { useState } from "react";
 import { runLattice, type LatticeReport } from "@/lib/qcrl/experiments";
 import type { RunInput } from "@/lib/qcrl/runs";
 import { timeCall } from "@/lib/qcrl/runs";
+import { LatticeResearchPanels } from "./lattice-research-panels";
 import { Callout, ErrorNote, Field, Metric, PrimaryButton, SectionIntro, TextInput, readInt } from "./ui";
 
 function fail(error: unknown): string {
@@ -140,6 +141,7 @@ export function LatticePanel({ save }: { save: (input: RunInput) => void }) {
           </pre>
         </div>
       ) : null}
+      <LatticeResearchPanels />
     </div>
   );
 }

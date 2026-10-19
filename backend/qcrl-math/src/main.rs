@@ -4,7 +4,7 @@ use axum::{
     http::{Method, StatusCode},
     routing::{get, post},
 };
-use qcrl_math::{Ring, automorphism, mod_inverse, modulo, ring_mul};
+use qcrl_math::{Ring, automorphism, gcd, mod_inverse, modulo, ring_mul};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -29,6 +29,85 @@ struct AutomorphismRequest {
     k: u64,
     q: i64,
     n: usize,
+}
+
+#[derive(Deserialize)]
+struct LweRequest {
+    n: usize,
+    m: usize,
+    q: i64,
+    seed: u32,
+    error_bound: i64,
+    secret_bound: i64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LweResponse {
+    engine: &'static str,
+    matrix_a: Vec<Vec<i64>>,
+    b: Vec<i64>,
+    planted_secret: Vec<i64>,
+    planted_error: Vec<i64>,
+    recovery_attempted: bool,
+    recovery_succeeded: bool,
+    matches_planted_secret: bool,
+    recovered_secret: Option<Vec<i64>>,
+    candidates_checked: usize,
+    search_space: Option<usize>,
+    fingerprint: String,
+}
+
+#[derive(Deserialize)]
+struct NormRequest {
+    coeffs: Vec<i64>,
+    q: i64,
+    n: usize,
+    relation: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct NormMeasure {
+    l_inf: i64,
+    l2_squared: i64,
+    hamming_weight: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NormProfileEntry {
+    k: usize,
+    l_inf: i64,
+    l2_squared: i64,
+    hamming_weight: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct NormResponse {
+    engine: &'static str,
+    canonical_coeffs: Vec<i64>,
+    l_inf: i64,
+    l2_squared: i64,
+    hamming_weight: usize,
+    dense_bits: usize,
+    sparse_bits: usize,
+    compression_ratio: Option<f64>,
+    gamma1: i64,
+    gamma2: f64,
+    within_gamma1: bool,
+    within_gamma2: bool,
+    is_short: bool,
+    norm_profile: Vec<NormProfileEntry>,
+}
+
+#[derive(Serialize)]
+struct LweFingerprint<'a> {
+    matrix_a: &'a [Vec<i64>],
+    b: &'a [i64],
+    planted_secret: &'a [i64],
+    planted_error: &'a [i64],
 }
 
 #[derive(Serialize)]
@@ -105,6 +184,277 @@ async fn apply_automorphism(
         Ok(result) => Ok(Json(json!({ "result": result }))),
         Err(message) => Err(error(StatusCode::BAD_REQUEST, message)),
     }
+}
+
+async fn generate_lwe(
+    Json(request): Json<LweRequest>,
+) -> Result<Json<LweResponse>, (StatusCode, Json<Value>)> {
+    if !(1..=64).contains(&request.n) || !(1..=256).contains(&request.m) {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "n must be 1..64 and m must be 1..256",
+        ));
+    }
+    if !(2..=4096).contains(&request.q) {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "q must be between 2 and 4096",
+        ));
+    }
+    if !(0..=4096).contains(&request.error_bound) || !(0..=4096).contains(&request.secret_bound) {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "error_bound and secret_bound must be between 0 and 4096",
+        ));
+    }
+
+    let mut rng = Mulberry32::new(request.seed);
+    let matrix_a: Vec<Vec<i64>> = (0..request.m)
+        .map(|_| (0..request.n).map(|_| rng.below(request.q)).collect())
+        .collect();
+    let planted_secret: Vec<i64> = (0..request.n)
+        .map(|_| rng.below(request.secret_bound * 2 + 1) - request.secret_bound)
+        .collect();
+    let planted_error: Vec<i64> = (0..request.m)
+        .map(|_| rng.below(request.error_bound * 2 + 1) - request.error_bound)
+        .collect();
+    let b: Vec<i64> = matrix_a
+        .iter()
+        .zip(&planted_error)
+        .map(|(row, &error_value)| {
+            let dot = row
+                .iter()
+                .zip(&planted_secret)
+                .map(|(&a, &secret)| a as i128 * secret as i128)
+                .sum::<i128>();
+            (dot + error_value as i128).rem_euclid(request.q as i128) as i64
+        })
+        .collect();
+
+    let recovery_attempted = request.n <= 4 && request.secret_bound <= 2;
+    let search_space =
+        recovery_attempted.then(|| (request.secret_bound * 2 + 1).pow(request.n as u32) as usize);
+    let mut candidates_checked = 0;
+    let mut recovered_secret = None;
+    let mut matches_planted_secret = false;
+    if let Some(space) = search_space {
+        let span = request.secret_bound * 2 + 1;
+        for encoded in 0..space {
+            let mut value = encoded;
+            let candidate: Vec<i64> = (0..request.n)
+                .map(|_| {
+                    let coefficient = (value % span as usize) as i64 - request.secret_bound;
+                    value /= span as usize;
+                    coefficient
+                })
+                .collect();
+            candidates_checked += 1;
+            if candidate_fits_lwe(&candidate, &matrix_a, &b, request.q, request.error_bound) {
+                if recovered_secret.is_none() {
+                    recovered_secret = Some(candidate.clone());
+                }
+                if candidate == planted_secret {
+                    recovered_secret = Some(candidate);
+                    matches_planted_secret = true;
+                }
+            }
+        }
+    }
+
+    let fingerprint_payload = LweFingerprint {
+        matrix_a: &matrix_a,
+        b: &b,
+        planted_secret: &planted_secret,
+        planted_error: &planted_error,
+    };
+    let fingerprint_json =
+        serde_json::to_string(&fingerprint_payload).expect("LWE fingerprint payload serializes");
+
+    Ok(Json(LweResponse {
+        engine: "rust",
+        matrix_a,
+        b,
+        planted_secret,
+        planted_error,
+        recovery_attempted,
+        recovery_succeeded: recovered_secret.is_some(),
+        matches_planted_secret,
+        recovered_secret,
+        candidates_checked,
+        search_space,
+        fingerprint: fnv1a(&fingerprint_json),
+    }))
+}
+
+fn candidate_fits_lwe(
+    secret: &[i64],
+    matrix: &[Vec<i64>],
+    b: &[i64],
+    q: i64,
+    error_bound: i64,
+) -> bool {
+    matrix.iter().zip(b).all(|(row, &sample)| {
+        let dot = row
+            .iter()
+            .zip(secret)
+            .map(|(&a, &coefficient)| a as i128 * coefficient as i128)
+            .sum::<i128>();
+        let residual = (sample as i128 - dot).rem_euclid(q as i128) as i64;
+        let centered = if residual > q / 2 {
+            residual - q
+        } else {
+            residual
+        };
+        centered.abs() <= error_bound
+    })
+}
+
+async fn track_norms(
+    Json(request): Json<NormRequest>,
+) -> Result<Json<NormResponse>, (StatusCode, Json<Value>)> {
+    let negacyclic = match request.relation.as_str() {
+        "negacyclic" => true,
+        "cyclic" => false,
+        _ => {
+            return Err(error(
+                StatusCode::BAD_REQUEST,
+                "relation must be cyclic or negacyclic",
+            ));
+        }
+    };
+    let ring = Ring::new(request.q, request.n, negacyclic)
+        .map_err(|message| error(StatusCode::BAD_REQUEST, message))?;
+    if request.coeffs.len() > 256 {
+        return Err(error(
+            StatusCode::BAD_REQUEST,
+            "coeffs may contain at most 256 values",
+        ));
+    }
+
+    let canonical_residues = reduce_polynomial(&request.coeffs, ring);
+    let canonical_coeffs: Vec<i64> = canonical_residues
+        .iter()
+        .map(|&coefficient| centered(coefficient, ring.q))
+        .collect();
+    let measure = measure_norms(&canonical_coeffs);
+    let gamma1 = 1 << 17;
+    let gamma2 = (ring.q - 1) as f64 / 88.0;
+    let within_gamma1 = measure.l_inf < gamma1;
+    let within_gamma2 = (measure.l_inf as f64) < gamma2;
+    let dense_bits = ring.n * ceil_log2(ring.q as usize);
+    let sparse_bits = measure.hamming_weight * (ceil_log2(ring.n) + ceil_log2(ring.q as usize));
+    let compression_ratio = if sparse_bits == 0 {
+        None
+    } else {
+        Some(dense_bits as f64 / sparse_bits as f64)
+    };
+    let mut norm_profile = Vec::new();
+    let max_exponent = if ring.negacyclic { 2 * ring.n } else { ring.n };
+    for k in 1..=max_exponent {
+        let accepted = if ring.negacyclic {
+            gcd(k as i64, (2 * ring.n) as i64) == 1
+        } else {
+            gcd(k as i64, ring.n as i64) == 1
+        };
+        if !accepted {
+            continue;
+        }
+        let transformed = if ring.negacyclic {
+            automorphism(&canonical_residues, k as u64, ring)
+                .map_err(|message| error(StatusCode::BAD_REQUEST, message))?
+        } else {
+            apply_cyclic_automorphism(&canonical_residues, k, ring)
+        };
+        let centered_transformed: Vec<i64> = transformed
+            .iter()
+            .map(|&coefficient| centered(coefficient, ring.q))
+            .collect();
+        let transformed_measure = measure_norms(&centered_transformed);
+        norm_profile.push(NormProfileEntry {
+            k,
+            l_inf: transformed_measure.l_inf,
+            l2_squared: transformed_measure.l2_squared,
+            hamming_weight: transformed_measure.hamming_weight,
+        });
+    }
+
+    Ok(Json(NormResponse {
+        engine: "rust",
+        canonical_coeffs,
+        l_inf: measure.l_inf,
+        l2_squared: measure.l2_squared,
+        hamming_weight: measure.hamming_weight,
+        dense_bits,
+        sparse_bits,
+        compression_ratio,
+        gamma1,
+        gamma2,
+        within_gamma1,
+        within_gamma2,
+        is_short: within_gamma1 && within_gamma2,
+        norm_profile,
+    }))
+}
+
+fn reduce_polynomial(coeffs: &[i64], ring: Ring) -> Vec<i64> {
+    let mut reduced = vec![0; ring.n];
+    for (degree, &coefficient) in coeffs.iter().enumerate() {
+        let wraps = degree / ring.n;
+        let sign = if ring.negacyclic && wraps % 2 == 1 {
+            -1_i128
+        } else {
+            1
+        };
+        let index = degree % ring.n;
+        reduced[index] =
+            (reduced[index] as i128 + sign * coefficient as i128).rem_euclid(ring.q as i128) as i64;
+    }
+    reduced
+}
+
+fn apply_cyclic_automorphism(coeffs: &[i64], k: usize, ring: Ring) -> Vec<i64> {
+    let mut output = vec![0_i64; ring.n];
+    for (degree, &coefficient) in coeffs.iter().enumerate() {
+        let index = (degree * k) % ring.n;
+        output[index] = (output[index] + coefficient).rem_euclid(ring.q);
+    }
+    output
+}
+
+fn centered(value: i64, q: i64) -> i64 {
+    let reduced = modulo(value, q);
+    if reduced > q / 2 {
+        reduced - q
+    } else {
+        reduced
+    }
+}
+
+fn measure_norms(coeffs: &[i64]) -> NormMeasure {
+    NormMeasure {
+        l_inf: coeffs
+            .iter()
+            .map(|coefficient| coefficient.abs())
+            .max()
+            .unwrap_or(0),
+        l2_squared: coeffs
+            .iter()
+            .map(|coefficient| coefficient * coefficient)
+            .sum(),
+        hamming_weight: coeffs
+            .iter()
+            .filter(|&&coefficient| coefficient != 0)
+            .count(),
+    }
+}
+
+fn fnv1a(value: &str) -> String {
+    let mut hash = 0x811c9dc5_u32;
+    for byte in value.bytes() {
+        hash ^= byte as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    format!("{hash:08x}")
 }
 
 async fn search(
@@ -510,6 +860,8 @@ async fn main() {
         .route("/api/health", get(health))
         .route("/api/search", post(search))
         .route("/api/automorphism", post(apply_automorphism))
+        .route("/api/lwe", post(generate_lwe))
+        .route("/api/norms", post(track_norms))
         .layer(cors);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3001")
         .await
@@ -595,6 +947,51 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(response["result"], json!([1, 4, 14, 2]));
+    }
+
+    #[tokio::test]
+    async fn lwe_recovers_seeded_small_instance() {
+        let Json(response) = generate_lwe(Json(LweRequest {
+            n: 2,
+            m: 8,
+            q: 17,
+            seed: 12345,
+            error_bound: 1,
+            secret_bound: 1,
+        }))
+        .await
+        .unwrap();
+        assert!(response.recovery_attempted);
+        assert!(response.recovery_succeeded);
+        assert!(response.matches_planted_secret);
+        assert_eq!(response.candidates_checked, 9);
+        assert_eq!(response.search_space, Some(9));
+        assert_eq!(response.matrix_a.len(), 8);
+        assert_eq!(response.b.len(), 8);
+    }
+
+    #[tokio::test]
+    async fn norms_match_centered_negacyclic_calculation() {
+        let Json(response) = track_norms(Json(NormRequest {
+            coeffs: vec![1, -3, 2, 0, -1],
+            q: 17,
+            n: 4,
+            relation: "negacyclic".into(),
+        }))
+        .await
+        .unwrap();
+        assert_eq!(response.canonical_coeffs, vec![2, -3, 2, 0]);
+        assert_eq!(response.l_inf, 3);
+        assert_eq!(response.l2_squared, 17);
+        assert_eq!(response.hamming_weight, 3);
+        assert_eq!(
+            response
+                .norm_profile
+                .iter()
+                .map(|entry| entry.k)
+                .collect::<Vec<_>>(),
+            vec![1, 3, 5, 7]
+        );
     }
 
     #[test]
